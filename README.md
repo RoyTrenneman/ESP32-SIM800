@@ -4,7 +4,7 @@ Monitoring power failure at home with the TTGO T-Call SIM800
 **Framework used: Arduino**
 
 **IDE used**:
-[PlatformIO Core](http://platformio.org/get-started/cli)
+[PlatformIO Core](https://docs.platformio.org/en/latest/quickstart.html)
 
 TTGO T-Call SIM800 library:
 https://github.com/Xinyuan-LilyGO/TTGO-T-Call
