@@ -15,6 +15,7 @@ int        BatLevel ;
 #define MODEM_RX             26
 #define I2C_SDA              21
 #define I2C_SCL              22
+// TTGP T-CALL Register definition
 #define IP5306_ADDR          0X75
 #define IP5306_REG_SYS_CTL0  0x00
 #define IP5306_REG_SYS_CTL1  0x01
@@ -139,19 +140,21 @@ void poweroff_gsm() {
 }
 
 
-void connect_GSM() {
+bool connect_GSM() {
   
   SerialMon.print("Waiting for network...");
   if (!modem.waitForNetwork(240000L)) {
     SerialMon.println(" fail");
     delay(10000);
-    return;
+    return false; 
   }
   SerialMon.println(" OK");
 
-  if (modem.isNetworkConnected()) {
-    SerialMon.println("Network connected");
+  if (!modem.isNetworkConnected()) {
+     return false;
   }
+    SerialMon.println("Network connected");
+    return true;
 }
 
 void setup() {
@@ -201,7 +204,7 @@ void loop() {
 
        if (!Charging) {
 	poweron_GSM();
-	connect_GSM();
+	while (!connect_GSM()){};
   	modem.sendSMS("+336xxxxxxxx", String("Power Outage detected!") );
 	delay(3000);
 	Charging_cur = false ;
