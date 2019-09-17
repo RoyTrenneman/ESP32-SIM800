@@ -10,5 +10,5 @@ TTGO T-Call SIM800 library:
 https://github.com/Xinyuan-LilyGO/TTGO-T-Call
 
 
-OLED SSD1306 0.91p I2C:
+OLED SSD1306 0.91p I2C
 ![Alt text](./oled.jpg)
