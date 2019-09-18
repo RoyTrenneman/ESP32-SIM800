@@ -3,6 +3,7 @@ const char apn[]      = "orange"; // Your APN
 const char gprsUser[] = "orange"; // User
 const char gprsPass[] = "orange"; // Password
 const char simPIN[]   = "0000"; // SIM card PIN code, if any
+const char Mynumber[] = "+33XXXXXXXXX";
 bool       Charging_cur;
 bool       newSMS     = false ;
 char       msg[100]   = "" ;
@@ -195,13 +196,17 @@ void display_OLED(char* sms, bool newSMS, bool isconnected, bool ischarging ) {
   switch (alive) {
 	case 1:
 	display.print("|");
+	break;
 	case 2:
 	display.print("/");
+	break;
 	case 3:
 	display.print("-");
+	break;
 	case 4:
 	display.print("\\");
-	alive = 0 ; 
+	alive = 0 ;
+	break;
  }
  alive++;
  display.display();
@@ -269,7 +274,7 @@ void loop() {
   do_in_loop();
   
   if (( isCharging() ) && (getBatteryLevel() != 0) ){
-     modem.sendSMS("+336XXXXXXXX", String("Power is back!") );
+     modem.sendSMS(Mynumber, String("Power is back!") );
      Charging_cur = true ;
   }
 
@@ -278,7 +283,7 @@ void loop() {
     if (!isCharging()) {
       poweron_GSM();
       while (!connect_GSM()) {};
-      modem.sendSMS("+336XXXXXXXX", String("Power Outage detected!") );
+      modem.sendSMS(Mynumber, String("Power Outage detected!") );
       delay(3000);
       Charging_cur = false;
     }
