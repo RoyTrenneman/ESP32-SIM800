@@ -192,7 +192,7 @@ void display_OLED(char* sms, bool newSMS, bool isconnected, bool ischarging ) {
     display.setCursor(0,10);
     display.print("Power OK!");
  };
-  display.setCursor(14,10);
+  display.setCursor(80,10);
   switch (alive) {
 	case 1:
 	display.print("|");
