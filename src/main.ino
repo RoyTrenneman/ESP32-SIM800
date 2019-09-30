@@ -1,13 +1,12 @@
 // Your GPRS credentials (leave empty, if missing)
+#define CONFIG_ESP32_ENABLE_COREDUMP_TO_FLASH 1
 const char apn[]      = "orange"; // Your APN
 const char gprsUser[] = "orange"; // User
 const char gprsPass[] = "orange"; // Password
 const char simPIN[]   = "0000"; // SIM card PIN code, if any
-const char Mynumber[] = "+33XXXXXXXXX";
-bool       Charging_cur;
+const char Mynumber[] = "+336XXXXXXX";
 bool       newSMS     = false ;
-char       msg[100]   = "" ;
-int 	   alive      = 1 ;
+char       msg[1000]   = "" ;
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #define SSD1306_ADDR         0x3C
@@ -43,6 +42,17 @@ Adafruit_SSD1306 display(128, 32, &Wire, -1);
 #define DUMP_AT_COMMANDS
 #include <Wire.h>
 #include <TinyGsmClient.h>
+#include <HTTPClient.h>
+#include <ArduinoHttpClient.h>
+#include <ArduinoJson.h>
+//Define Wifi
+#include <WiFi.h>
+const char* ssid = "Livebox";                   
+const char* password =  "XXXXX";
+
+const char server[] = "httpbin.org";
+const char resource[] = "/get";
+const int  port = 80;
 
 #ifdef DUMP_AT_COMMANDS
   #include <StreamDebugger.h>
@@ -53,6 +63,13 @@ Adafruit_SSD1306 display(128, 32, &Wire, -1);
 #endif
 
 TinyGsmClient client(modem);
+HttpClient http(client, server, port);
+
+static const unsigned char PROGMEM iconeTel [] =
+{
+0x18, 0x00, 0x38, 0x00, 0x7c, 0x00, 0x7c, 0x00, 0x7c, 0x00, 0x78, 0x00, 0x70, 0x00, 0x78, 0x00,
+0x38, 0x00, 0x3c, 0x00, 0x1e, 0x18, 0x0f, 0x3c, 0x07, 0xfe, 0x03, 0xfe, 0x01, 0xfc, 0x00, 0x78
+};
 
 bool isCharging() {
 	
@@ -170,9 +187,23 @@ bool connect_GSM() {
 void display_OLED(char* sms, bool newSMS, bool isconnected, bool ischarging ) {
   
  String Mysms = String(sms);
+ Mysms.trim();
+ Serial.println("------------ ");
+ Serial.print("dump stream is: ");
+ Serial.println(Mysms);
+ Serial.println("------------ ");
  display.clearDisplay();
- display.setCursor(0,20);
- display.print(Mysms.substring(50));
+ display.setCursor(0,15);
+ if (Mysms.substring(0, 4).equals("+CMT")) {
+  display.print(Mysms.substring(46));
+  //Serial.println(Mysms.substring(46));
+ // Serial.println(Mysms.substring(0, 4));
+ }
+ 
+ if (Mysms.substring(0, 4).equals("RING")) {
+  display.drawBitmap(90, 5, iconeTel , 16, 16, 1);
+ // Serial.println(Mysms.substring(0, 4));
+ }
 
  if (!isconnected) {
     delay(800);
@@ -192,8 +223,9 @@ void display_OLED(char* sms, bool newSMS, bool isconnected, bool ischarging ) {
     display.setCursor(0,10);
     display.print("Power OK!");
  };
-  display.setCursor(80,10);
-  switch (alive) {
+ static int alive = 1 ;
+ display.setCursor(80,10);
+ switch (alive) {
 	case 1:
 	display.print("|");
 	break;
@@ -227,11 +259,63 @@ void showSMS() {
    };
 }
 
+bool checkLan() {
+  HTTPClient http2;
+  http2.begin("http://httpbin.org/ip"); //HTTP
+  int httpCode = http2.GET();
+  if(httpCode > 0) {
+   // HTTP header has been send and Server response header has been handled
+    if(httpCode == HTTP_CODE_OK) {
+      String payload = http2.getString();
+      StaticJsonDocument<200> doc; // <- a little more than 200 bytes in the stack
+      deserializeJson(doc, payload);
+      const char* IPLAN  = doc["origin"]; 
+      Serial.println("IP LAN is " + ((String(IPLAN)).substring(0, 14)));
+      return true;
+      } else {
+      Serial.printf("[HTTP] GET... failed, error: %s\n", http2.errorToString(httpCode).c_str());
+      return false;
+     }
+  }
+ return false;
+}
+
+bool checkWan() {
+  int err = http.get(resource);
+  if (err != 0) {
+    Serial.println(F("failed to connect"));
+    delay(9999);
+    return false; 
+  }
+
+  int status = http.responseStatusCode();
+  if (!status) {
+    delay(10000);
+    return false;
+  }
+
+  String body = http.responseBody();
+  StaticJsonDocument<200> doc; // <- a little more than 200 bytes in the stack
+  deserializeJson(doc, body);
+  const char* IPWAN  = doc["origin"]; 
+  Serial.println("IP WAN is " + ((String(IPWAN)).substring(0, 13)));		
+  http.stop();
+  return true;
+}
+
+
 void do_in_loop(){
- showSMS();  
- display_OLED(msg, newSMS, checkNetwork(), isCharging() );
+// showSMS();  
+ bool isconnected = checkNetwork();
+ bool charging = isCharging();
+ if (!isconnected) {
+  poweron_GSM();
+  connect_GSM();
+ }
+ 
+ display_OLED(msg, newSMS, isconnected ,charging );
     
-    String infoPower = "Is Charging?" + String ((isCharging() ? " YES" : " NO")); 
+    String infoPower = "Is Charging?" + String ((charging ? " YES" : " NO")); 
     String infoPower2 = "Is Charge full?" + String ((isChargeFull() ? " YES" : " NO")); 
     String infoPower3 = "Battery Level: " + String(getBatteryLevel()) + "%" ;  
     Serial.println(infoPower);
@@ -239,6 +323,14 @@ void do_in_loop(){
     Serial.println(infoPower3);
     Serial.println("");
 
+ static int t = 0;
+ if (t >= 5) {  
+ checkLan();
+ checkWan(); 
+ t = 0;
+ }
+ t++;
+ 
 }
 
 
@@ -260,7 +352,33 @@ void setup() {
   // Start GSM module
   poweron_GSM();
   while (!connect_GSM()){};
+  delay(2);
   
+  // Set gprs
+  if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
+      Serial.println(" fail");
+      delay(10000);
+      return;
+    }
+    Serial.println(" success");
+
+    if (modem.isGprsConnected()) {
+      Serial.println("GPRS connected");
+   }
+  
+  // Start Wifi
+  WiFi.mode(WIFI_STA);                                           
+  WiFi.begin(ssid, password);                                    
+                                                               
+  while (WiFi.status() != WL_CONNECTED) {                        
+    delay(500);                                                
+  Serial.println("Connecting to WiFi..");       
+  }                                                            
+                                                               
+  Serial.println("Connected to the WiFi network");  
+  Serial.print("IP: ");          
+  Serial.println(WiFi.localIP());
+
   // Set-up the display
   display.begin(SSD1306_SWITCHCAPVCC, SSD1306_ADDR);
   display.setTextSize(1);
@@ -272,17 +390,27 @@ void setup() {
 
 void loop() {
   do_in_loop();
-  
+  static bool isfirst = true;
+  static bool Charging_cur;
+  if (isfirst && !isCharging()) {
+      modem.sendSMS(Mynumber, String("Power Outage detected!") );
+      isfirst = false ;
+  } 
   if (( isCharging() ) && (getBatteryLevel() != 0) ){
-     modem.sendSMS(Mynumber, String("Power is back!") );
+  //   poweron_GSM();
+     while (!connect_GSM()) {};
+    // modem.sendSMS(Mynumber, String("Power is back!") );
+//   modem.sendFlashSMS("07913386....4F4F29C0E", 17);
      Charging_cur = true ;
   }
 
   while (Charging_cur) {
     do_in_loop();
     if (!isCharging()) {
+      setPowerBoostKeepOn();
       poweron_GSM();
       while (!connect_GSM()) {};
+      isfirst = false ;
       modem.sendSMS(Mynumber, String("Power Outage detected!") );
       delay(3000);
       Charging_cur = false;
